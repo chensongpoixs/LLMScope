@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLMScope 诊断</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .section {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success { color: green; }
+        .error { color: red; }
+        h2 { margin-top: 0; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔬 LLMScope 前端诊断</h1>
+    
+    <div class="section">
+        <h2>1. 配置文件检查</h2>
+        <div id="config-check"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. 后端连接测试</h2>
+        <div id="backend-check"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. 浏览器控制台错误</h2>
+        <div id="console-errors"></div>
+    </div>
+
+    <script src="/config.js"></script>
+    <script>
+        const errors = [];
+        
+        // 捕获控制台错误
+        window.addEventListener('error', (e) => {
+            errors.push(e.message);
+        });
+
+        // 1. 检查配置
+        const configCheck = document.getElementById('config-check');
+        if (window.LLMSCOPE_CONFIG) {
+            configCheck.innerHTML = `
+                <p class="success">✓ 配置文件加载成功</p>
+                <pre>${JSON.stringify(window.LLMSCOPE_CONFIG, null, 2)}</pre>
+            `;
+        } else {
+            configCheck.innerHTML = '<p class="error">✗ 配置文件未加载</p>';
+        }
+
+        // 2. 测试后端连接
+        const backendCheck = document.getElementById('backend-check');
+        const apiUrl = window.LLMSCOPE_CONFIG?.apiBaseUrl || 'http://localhost:8080';
+        
+        fetch(`${apiUrl}/health`)
+            .then(res => res.json())
+            .then(data => {
+                backendCheck.innerHTML = `
+                    <p class="success">✓ 后端连接成功</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            })
+            .catch(err => {
+                backendCheck.innerHTML = `
+                    <p class="error">✗ 后端连接失败</p>
+                    <p>URL: ${apiUrl}/health</p>
+                    <p>错误: ${err.message}</p>
+                    <p>请确保后端服务正在运行: <code>cd backend && go run main.go</code></p>
+                `;
+            });
+
+        // 3. 显示控制台错误
+        setTimeout(() => {
+            const consoleErrors = document.getElementById('console-errors');
+            if (errors.length > 0) {
+                consoleErrors.innerHTML = `
+                    <p class="error">发现 ${errors.length} 个错误:</p>
+                    <pre>${errors.join('\n')}</pre>
+                `;
+            } else {
+                consoleErrors.innerHTML = '<p class="success">✓ 无控制台错误</p>';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
