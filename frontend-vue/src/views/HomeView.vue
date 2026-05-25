@@ -212,16 +212,6 @@ const importModel = () => {
   newModel.value = { name: '', path: '' }
 }
 
-const testBackend = async () => {
-  try {
-    const response = await fetch(`${config.apiBaseUrl}/health`)
-    const data = await response.json()
-    message.success('后端连接成功: ' + JSON.stringify(data))
-  } catch (error) {
-    message.error('后端连接失败: ' + (error as Error).message)
-  }
-}
-
 // 组件挂载时自动加载模型和检查状态
 onMounted(() => {
   console.log('HomeView mounted')

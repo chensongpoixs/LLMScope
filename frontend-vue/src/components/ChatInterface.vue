@@ -262,7 +262,7 @@ import { modelAPI } from '@/api/model'
 import { useChatStream, type ChatUiMessage, type ChatStats } from '@/composables/useChatStream'
 import ThinkingSection from '@/components/ThinkingSection.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     fullHeight?: boolean
     enableAttachments?: boolean
