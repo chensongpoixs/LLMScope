@@ -3,8 +3,12 @@
 > Large Language Model Microscope
 > 大模型显微镜
 
+
+
+
 一个基于 `llama.cpp` 的大模型内部结构可视化与推理观测平台。
 
+![](img/3c3278d8ad6b96449f4915dfa00c3a10.png)
 ---
 
 # 一、项目定位
