@@ -71,7 +71,10 @@
                     <n-text>参数量: {{ model.params }}</n-text>
                     <n-text>架构: {{ model.architecture }}</n-text>
                     <n-text>量化: {{ model.quantization }}</n-text>
-                    <n-text>Context: {{ model.contextLength }}K</n-text>
+                    <n-text>Context: {{ formatContext(model.contextLength) }}</n-text>
+                    <n-text v-if="model.fileSize && model.fileSize !== 'Unknown'">
+                      体积: {{ model.fileSize }}
+                    </n-text>
                     <n-tag :type="model.loaded ? 'success' : 'default'">
                       {{ model.loaded ? '已加载' : '未加载' }}
                     </n-tag>
@@ -138,6 +141,13 @@ const showImportModal = ref(false)
 const newModel = ref({ name: '', path: '' })
 const llamaStatus = ref<any>(null)
 const showChat = ref(false)
+
+/** contextLength 为 K 单位（来自后端 n_ctx/1024） */
+function formatContext(contextK: number): string {
+  if (!contextK || contextK <= 0) return '未知'
+  if (contextK >= 1024) return `${(contextK / 1024).toFixed(1)}M`
+  return `${contextK}K`
+}
 
 // 检查 llama.cpp 状态
 const checkLlamaStatus = async () => {

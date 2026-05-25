@@ -2,9 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"llmscope-backend/internal/config"
 	"llmscope-backend/internal/types"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -60,6 +62,77 @@ func extractQuantizationFromModelName(name string) string {
 	return "Unknown"
 }
 
+func toInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	default:
+		return 0, false
+	}
+}
+
+// formatParamsFromMeta 从 llama.cpp meta.n_params 格式化参数量
+func formatParamsFromMeta(nParams int64) string {
+	if nParams <= 0 {
+		return "Unknown"
+	}
+	billions := float64(nParams) / 1e9
+	if billions >= 1 {
+		if billions >= 10 {
+			return fmt.Sprintf("%.0fB", math.Round(billions))
+		}
+		return fmt.Sprintf("%.1fB", billions)
+	}
+	millions := float64(nParams) / 1e6
+	if millions >= 1 {
+		return fmt.Sprintf("%.0fM", math.Round(millions))
+	}
+	return "Unknown"
+}
+
+// contextLengthK 将 n_ctx（token 数）转为前端展示的 K 单位
+func contextLengthK(nCtx int64) int {
+	if nCtx <= 0 {
+		return 0
+	}
+	k := int(nCtx / 1024)
+	if k < 1 {
+		return 1
+	}
+	return k
+}
+
+func formatFileSize(bytes int64) string {
+	if bytes <= 0 {
+		return "Unknown"
+	}
+	const unit = 1024.0
+	b := float64(bytes)
+	if b >= unit*unit*unit {
+		return fmt.Sprintf("%.1fGB", b/(unit*unit*unit))
+	}
+	if b >= unit*unit {
+		return fmt.Sprintf("%.1fMB", b/(unit*unit))
+	}
+	return fmt.Sprintf("%.0fKB", b/unit)
+}
+
+func applyMetaToModel(model *types.ModelInfo, meta map[string]interface{}) {
+	if nCtx, ok := toInt64(meta["n_ctx"]); ok && nCtx > 0 {
+		model.ContextLength = contextLengthK(nCtx)
+	}
+	if nParams, ok := toInt64(meta["n_params"]); ok && nParams > 0 {
+		model.Params = formatParamsFromMeta(nParams)
+	}
+	if size, ok := toInt64(meta["size"]); ok && size > 0 {
+		model.FileSize = formatFileSize(size)
+	}
+}
+
 // GetModels 获取模型列表
 func GetModels(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -86,11 +159,10 @@ func GetModels(cfg *config.Config) gin.HandlerFunc {
 								modelName = id
 							}
 
-							// 从模型名称提取参数量和量化信息
+							// 从文件名解析（meta 缺失时的回退）
 							params := extractParamsFromModelName(modelName)
 							quantization := extractQuantizationFromModelName(modelName)
 
-							// 尝试从名称判断架构
 							architecture := "LLaMA"
 							nameLower := strings.ToLower(modelName)
 							if strings.Contains(nameLower, "gemma") {
@@ -105,16 +177,35 @@ func GetModels(cfg *config.Config) gin.HandlerFunc {
 								architecture = "Phi"
 							}
 
-							models = append(models, types.ModelInfo{
+							info := types.ModelInfo{
 								ID:            modelID,
 								Name:          modelName,
 								Params:        params,
 								Architecture:  architecture,
-								ContextLength: 4,
+								ContextLength: 0,
 								Quantization:  quantization,
 								FileSize:      "Unknown",
 								Loaded:        true,
-							})
+							}
+
+							// 优先使用 llama.cpp meta（n_ctx / n_params / size）
+							if meta, ok := modelData["meta"].(map[string]interface{}); ok {
+								applyMetaToModel(&info, meta)
+							}
+
+							// meta 未提供 context 时，尝试从 n_ctx_train 等字段
+							if info.ContextLength == 0 {
+								if meta, ok := modelData["meta"].(map[string]interface{}); ok {
+									if nTrain, ok := toInt64(meta["n_ctx_train"]); ok && nTrain > 0 {
+										info.ContextLength = contextLengthK(nTrain)
+									}
+								}
+							}
+							if info.ContextLength == 0 {
+								info.ContextLength = 4 // 最后回退
+							}
+
+							models = append(models, info)
 						}
 					}
 				}
